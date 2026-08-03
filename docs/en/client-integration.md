@@ -45,4 +45,8 @@ Clients should also treat HTTP `403` on a known protected navigation/playback at
 | Android TV official client | Yes | Client contribution required |
 | Roku official client | Yes | Client contribution required |
 
+## Remote unlock fallback
+
+Administrators can use the JellyPIN dashboard to unlock one selected active device after verifying the PIN. This is the supported fallback for native clients, including Roku, that cannot install or display a JellyPIN-specific dialog. The action is rate-limited, audited, bound to the selected Jellyfin user and device id, and expires normally.
+
 Client patches should be maintained in the respective upstream client repositories. Bundling modified official application binaries inside the server plugin would complicate signing, store distribution, upgrades, and security review.

@@ -45,6 +45,12 @@ O bloqueio no servidor funciona para Android TV e Roku: metadados e reproduçõe
 
 ## Segurança
 
+### Desbloqueio remoto de TVs
+
+No painel do JellyPIN, a seção **Dispositivos** mostra o usuário, o nome do aparelho, o cliente, a última atividade e o horário de expiração. Um administrador pode informar o PIN e usar **Desbloquear dispositivo** para liberar somente o aparelho selecionado. Isso permite liberar Roku e outros clientes nativos que não conseguem exibir a janela do JellyPIN.
+
+O desbloqueio remoto exige autenticação administrativa elevada, respeita o limite de tentativas e é registrado na auditoria. O PIN não é armazenado pelo navegador.
+
 - O PIN é salvo somente como hash PBKDF2-SHA256 com salt aleatório.
 - PIN em texto, hash e token Jellyfin nunca entram na auditoria.
 - Sessões desbloqueadas e tentativas ficam somente na memória; reiniciar o Jellyfin bloqueia tudo.

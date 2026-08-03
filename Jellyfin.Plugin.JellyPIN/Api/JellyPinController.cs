@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using MediaBrowser.Common.Api;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Session;
 
 namespace Jellyfin.Plugin.JellyPIN.Api;
 
@@ -22,6 +23,7 @@ public sealed partial class JellyPinController(
     IActiveProtectedRequestTracker activeRequests,
     IProtectedPlaybackStopService playbackStopService,
     IAuditService audit,
+    ISessionManager sessionManager,
     IAuthorizationContext authorizationContext) : ControllerBase
 {
     [HttpPost("Pin")]
@@ -111,6 +113,47 @@ public sealed partial class JellyPinController(
         return Ok(new UnlockResponse(true, expiry));
     }
 
+    [HttpPost("Devices/Unlock")]
+    [Authorize(Policy = Policies.RequiresElevation)]
+    [ProducesResponseType<UnlockResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public async Task<ActionResult<UnlockResponse>> UnlockDevice([FromBody] RemoteUnlockRequest request)
+    {
+        var config = GetConfiguration();
+        if (string.IsNullOrWhiteSpace(config.PinHash)) return Problem("JellyPIN has not been configured.", statusCode: 409);
+        if (request.UserId == Guid.Empty || string.IsNullOrWhiteSpace(request.DeviceId)) return BadRequest("A target user and device are required.");
+
+        var administrator = await GetIdentityAsync().ConfigureAwait(false);
+        var attemptDeviceId = $"REMOTE:{request.DeviceId.Trim()}";
+        var decision = attemptLimiter.Check(administrator.UserId, attemptDeviceId, config.MaximumAttempts, TimeSpan.FromMinutes(config.LockoutMinutes));
+        if (!decision.Allowed)
+        {
+            audit.Record(AuditEventType.UnlockFailed, administrator.UserId, administrator.UserName, request.DeviceId, detail: "Remote unlock rejected during lockout.");
+            if (decision.LockedUntil is { } lockedUntil) Response.Headers.RetryAfter = Math.Max(1, (int)(lockedUntil - DateTimeOffset.UtcNow).TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return StatusCode(StatusCodes.Status429TooManyRequests);
+        }
+
+        var target = sessionManager.Sessions
+            .Where(session => session.UserId == request.UserId && string.Equals(session.DeviceId, request.DeviceId, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(session => session.LastActivityDate)
+            .FirstOrDefault();
+        if (target is null) return NotFound("The selected Jellyfin device session is no longer available.");
+
+        if (!pinHasher.Verify(request.Pin, config.PinHash))
+        {
+            attemptLimiter.RecordFailure(administrator.UserId, attemptDeviceId, config.MaximumAttempts, TimeSpan.FromMinutes(config.LockoutMinutes));
+            audit.Record(AuditEventType.UnlockFailed, request.UserId, target.UserName, target.DeviceId, target.DeviceName, target.Client, $"Incorrect PIN during remote unlock by {administrator.UserName}.");
+            return Unauthorized();
+        }
+
+        attemptLimiter.Reset(administrator.UserId, attemptDeviceId);
+        var expiry = sessions.Unlock(request.UserId, target.DeviceId, TimeSpan.FromMinutes(config.UnlockDurationMinutes), target.UserName, target.DeviceName, target.Client);
+        audit.Record(AuditEventType.UnlockSucceeded, request.UserId, target.UserName, target.DeviceId, target.DeviceName, target.Client, $"Remote unlock by administrator {administrator.UserName}.");
+        return Ok(new UnlockResponse(true, expiry));
+    }
+
     [HttpPost("Lock")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Lock()
@@ -188,6 +231,33 @@ public sealed partial class JellyPinController(
             session.LastActivityAt,
             session.ExpiresAt))
         .ToArray());
+
+    [HttpGet("Devices")]
+    [Authorize(Policy = Policies.RequiresElevation)]
+    [ProducesResponseType<JellyPinDeviceResponse[]>(StatusCodes.Status200OK)]
+    public ActionResult<JellyPinDeviceResponse[]> Devices()
+    {
+        var devices = sessionManager.Sessions
+            .Where(session => session.UserId != Guid.Empty && !string.IsNullOrWhiteSpace(session.DeviceId))
+            .GroupBy(session => (session.UserId, DeviceId: session.DeviceId.ToUpperInvariant()))
+            .Select(group => group.OrderByDescending(session => session.LastActivityDate).First())
+            .OrderByDescending(session => session.LastActivityDate)
+            .Select(session =>
+            {
+                var unlocked = sessions.IsUnlocked(session.UserId, session.DeviceId, out var expiresAt);
+                return new JellyPinDeviceResponse(
+                    session.UserId,
+                    session.UserName ?? string.Empty,
+                    session.DeviceId,
+                    session.DeviceName ?? string.Empty,
+                    session.Client ?? string.Empty,
+                    new DateTimeOffset(DateTime.SpecifyKind(session.LastActivityDate, DateTimeKind.Utc)),
+                    unlocked,
+                    unlocked ? expiresAt : null);
+            })
+            .ToArray();
+        return Ok(devices);
+    }
 
     [HttpGet("Audit")]
     [Authorize(Policy = Policies.RequiresElevation)]

@@ -56,6 +56,8 @@ All endpoints require a valid Jellyfin-authenticated request. Administrative end
 | `POST` | `/JellyPIN/Lock` | Lock the current device |
 | `POST` | `/JellyPIN/LockAll` | Administratively lock every device and stop protected playback |
 | `GET` | `/JellyPIN/Sessions` | List active unlock sessions |
+| `GET` | `/JellyPIN/Devices` | Administratively list active Jellyfin devices and their JellyPIN state |
+| `POST` | `/JellyPIN/Devices/Unlock` | Administratively unlock a selected device after verifying the PIN |
 | `GET` | `/JellyPIN/Audit?limit=100` | Read recent audit events |
 | `DELETE` | `/JellyPIN/Audit` | Clear audit history |
 | `GET` | `/JellyPIN/Items/{id}/Access` | Check whether an item is protected and allowed |

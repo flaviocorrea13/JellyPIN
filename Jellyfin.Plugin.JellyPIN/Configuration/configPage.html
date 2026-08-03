@@ -19,9 +19,12 @@
       <button id="TestUnlock" is="emby-button" type="button" class="raised block emby-button"><span>Testar PIN e desbloquear este dispositivo</span></button>
       <button id="LockAll" is="emby-button" type="button" class="raised block emby-button button-delete"><span>Bloquear todos os dispositivos agora</span></button>
 
-      <h2 style="margin-top:2em">Dispositivos desbloqueados</h2>
-      <p id="NoSessions">Nenhum dispositivo desbloqueado.</p>
-      <div style="overflow-x:auto"><table id="SessionsTable" class="detailTable" style="display:none;width:100%"><thead><tr><th>Usuário</th><th>Dispositivo</th><th>Cliente</th><th>Última atividade</th><th>Expira</th></tr></thead><tbody></tbody></table></div>
+      <h2 style="margin-top:2em">Dispositivos</h2>
+      <p>Digite o PIN abaixo para desbloquear remotamente uma TV ou outro aparelho. O PIN não é armazenado.</p>
+      <div class="inputContainer"><label class="inputLabel" for="RemotePin">PIN para desbloqueio remoto</label><input id="RemotePin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" is="emby-input"></div>
+      <button id="RefreshDevices" is="emby-button" type="button" class="raised block emby-button"><span>Atualizar dispositivos</span></button>
+      <p id="NoDevices">Nenhum dispositivo ativo encontrado.</p>
+      <div style="overflow-x:auto"><table id="DevicesTable" class="detailTable" style="display:none;width:100%"><thead><tr><th>Usuário</th><th>Dispositivo</th><th>Cliente</th><th>Última atividade</th><th>Expira</th><th>Ação</th></tr></thead><tbody></tbody></table></div>
 
       <h2 style="margin-top:2em">Auditoria</h2>
       <button id="RefreshAudit" is="emby-button" type="button" class="raised block emby-button"><span>Atualizar auditoria</span></button>
@@ -61,15 +64,39 @@
         ? 'Este dispositivo está desbloqueado até ' + date(value(status, 'ExpiresAt'))
         : (configured ? 'PIN configurado; este dispositivo está bloqueado.' : 'PIN ainda não configurado.');
     }
-    async function refreshSessions() {
-      const sessions = await ApiClient.ajax({type:'GET', url:ApiClient.getUrl('JellyPIN/Sessions', {_:Date.now()}), dataType:'json'});
-      setRows('#SessionsTable', '#NoSessions', sessions.map(session => [
-        value(session, 'UserName') || value(session, 'UserId'),
-        value(session, 'DeviceName') || value(session, 'DeviceId'),
-        value(session, 'Client'),
-        date(value(session, 'LastActivityAt')),
-        date(value(session, 'ExpiresAt'))
-      ]));
+    async function refreshDevices() {
+      const devices = await ApiClient.ajax({type:'GET', url:ApiClient.getUrl('JellyPIN/Devices', {_:Date.now()}), dataType:'json'});
+      const table = document.querySelector('#DevicesTable');
+      const body = table.querySelector('tbody');
+      body.replaceChildren();
+      devices.forEach(device => {
+        const row = document.createElement('tr');
+        [
+          value(device, 'UserName') || value(device, 'UserId'),
+          value(device, 'DeviceName') || value(device, 'DeviceId'),
+          value(device, 'Client'),
+          date(value(device, 'LastActivityAt')),
+          value(device, 'Unlocked') ? date(value(device, 'ExpiresAt')) : 'Bloqueado'
+        ].forEach(text => { const cell = document.createElement('td'); cell.textContent = text || '—'; row.appendChild(cell); });
+        const actionCell = document.createElement('td');
+        const button = document.createElement('button');
+        button.type = 'button'; button.className = 'raised emby-button';
+        button.textContent = value(device, 'Unlocked') ? 'Desbloqueado' : 'Desbloquear dispositivo';
+        button.disabled = Boolean(value(device, 'Unlocked'));
+        button.addEventListener('click', () => unlockDevice(device));
+        actionCell.appendChild(button); row.appendChild(actionCell); body.appendChild(row);
+      });
+      table.style.display = devices.length ? '' : 'none';
+      document.querySelector('#NoDevices').style.display = devices.length ? 'none' : '';
+    }
+    async function unlockDevice(device) {
+      const pinInput = document.querySelector('#RemotePin');
+      const pin = pinInput.value;
+      if (!pin) { Dashboard.alert('Digite o PIN para desbloquear o dispositivo.'); return; }
+      try {
+        await ApiClient.ajax({type:'POST',url:ApiClient.getUrl('JellyPIN/Devices/Unlock'),data:JSON.stringify({userId:value(device,'UserId'),deviceId:value(device,'DeviceId'),pin}),contentType:'application/json',dataType:'json'});
+        pinInput.value = ''; await refreshAll(); Dashboard.alert('Dispositivo desbloqueado com sucesso.');
+      } catch (error) { pinInput.value = ''; Dashboard.alert('PIN recusado ou dispositivo indisponível. Erro HTTP: ' + (error.status || error.message || error)); }
     }
     async function refreshAudit() {
       const events = await ApiClient.ajax({type:'GET', url:ApiClient.getUrl('JellyPIN/Audit', {limit:100,_:Date.now()}), dataType:'json'});
@@ -81,7 +108,7 @@
         value(event, 'Detail')
       ]));
     }
-    async function refreshAll() { await Promise.all([refreshStatus(), refreshSessions(), refreshAudit()]); }
+    async function refreshAll() { await Promise.all([refreshStatus(), refreshDevices(), refreshAudit()]); }
     async function loadLibraries(selectedId) {
       const select = document.querySelector('#ProtectedLibraryId');
       const libraries = await ApiClient.ajax({type:'GET', url:ApiClient.getUrl('JellyPIN/Libraries', {_:Date.now()}), dataType:'json'});
@@ -120,6 +147,7 @@
     });
     document.querySelector('#TestStatus').addEventListener('click', refreshAll);
     document.querySelector('#RefreshAudit').addEventListener('click', refreshAudit);
+    document.querySelector('#RefreshDevices').addEventListener('click', refreshDevices);
     document.querySelector('#TestUnlock').addEventListener('click', async () => {
       const pin = document.querySelector('#Pin').value;
       if (!pin) { Dashboard.alert('Digite o PIN no campo Novo PIN para testar.'); return; }

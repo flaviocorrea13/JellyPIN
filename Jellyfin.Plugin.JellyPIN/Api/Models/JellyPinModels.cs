@@ -2,6 +2,8 @@ namespace Jellyfin.Plugin.JellyPIN.Api.Models;
 
 public sealed record UnlockRequest(string Pin);
 
+public sealed record RemoteUnlockRequest(Guid UserId, string DeviceId, string Pin);
+
 public sealed record SetPinRequest(string Pin);
 
 public sealed record JellyPinStatusResponse(bool Configured, bool Unlocked, DateTimeOffset? ExpiresAt);
@@ -26,6 +28,16 @@ public sealed record UnlockSessionResponse(
     DateTimeOffset UnlockedAt,
     DateTimeOffset LastActivityAt,
     DateTimeOffset ExpiresAt);
+
+public sealed record JellyPinDeviceResponse(
+    Guid UserId,
+    string UserName,
+    string DeviceId,
+    string DeviceName,
+    string Client,
+    DateTimeOffset LastActivityAt,
+    bool Unlocked,
+    DateTimeOffset? ExpiresAt);
 
 public sealed record AuditEventResponse(
     Guid Id,

@@ -31,4 +31,8 @@ O PIN deve existir somente na memória da tela, ser apagado imediatamente e nunc
 | Android TV oficial | Sim | Exige contribuição no cliente |
 | Roku oficial | Sim | Exige contribuição no cliente |
 
+## Alternativa por desbloqueio remoto
+
+O administrador pode usar o painel do JellyPIN para desbloquear apenas um dispositivo ativo depois de validar o PIN. Essa é a alternativa indicada para clientes nativos, incluindo Roku, que não permitem instalar ou mostrar uma janela própria do JellyPIN. A operação respeita o limite de tentativas, entra na auditoria, fica vinculada ao usuário e ao identificador do aparelho e expira normalmente.
+
 Os patches nativos devem ser mantidos nos respectivos repositórios oficiais. Distribuir aplicativos oficiais modificados dentro do plugin prejudicaria assinatura, lojas, atualizações e revisão de segurança.
