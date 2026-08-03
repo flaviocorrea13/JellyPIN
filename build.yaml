@@ -1,7 +1,7 @@
 ---
 name: "JellyPIN"
 guid: "09d4787d-3d9a-47ab-a5a6-44561d36a90e"
-version: "0.5.0.4"
+version: "0.6.0.0"
 targetAbi: "10.11.0.0"
 framework: "net9.0"
 overview: "Temporary PIN unlock sessions for Jellyfin."
@@ -11,4 +11,4 @@ category: "General"
 owner: "Flavio Correa (@flaviocorrea13)"
 artifacts:
   - "Jellyfin.Plugin.JellyPIN.dll"
-changelog: "Add JellyPIN artwork and link repository labels to the GitHub project."
+changelog: "Add activity-based renewal, logout revocation, active-device management and persistent audit history."

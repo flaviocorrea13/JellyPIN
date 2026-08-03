@@ -41,6 +41,19 @@ jobs:
           md5sum "release/${package}" > "release/${package}.md5"
           sha256sum "release/${package}" > "release/${package}.sha256"
 
+      - name: Build JellyPIN Web for Jellyfin 10.11.11
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          git clone --depth 1 --branch v10.11.11 https://github.com/jellyfin/jellyfin-web.git release/jellyfin-web
+          git -C release/jellyfin-web apply "${GITHUB_WORKSPACE}/patches/jellyfin-web-pin-integration.patch"
+          git -C release/jellyfin-web apply "${GITHUB_WORKSPACE}/patches/jellyfin-web-repository-project-link.patch"
+          mkdir -p release/jellyfin-web/src/components/jellypin
+          cp web/jellypin.js release/jellyfin-web/src/components/jellypin/jellypin.js
+          npm --prefix release/jellyfin-web ci
+          NODE_OPTIONS=--max-old-space-size=8192 npm --prefix release/jellyfin-web run build:production
+          (cd release/jellyfin-web/dist && zip -9 -r "../../JellyPIN_Web_${version}_Jellyfin_10.11.11.zip" .)
+
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -53,10 +66,12 @@ jobs:
           package="JellyPIN_${version}_Jellyfin_10.11.11.zip"
           checksum="$(md5sum "release/${package}" | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')"
           source_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${package}"
+          timestamp="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          changelog="$(jq -r '.changelog' meta.json)"
           git fetch origin main
           git checkout main
-          jq --arg version "$version" --arg checksum "$checksum" --arg source_url "$source_url" \
-            '.[0].versions[0].version = $version | .[0].versions[0].checksum = $checksum | .[0].versions[0].sourceUrl = $source_url' \
+          jq --arg version "$version" --arg checksum "$checksum" --arg source_url "$source_url" --arg timestamp "$timestamp" --arg changelog "$changelog" \
+            '.[0].versions[0].version = $version | .[0].versions[0].checksum = $checksum | .[0].versions[0].sourceUrl = $source_url | .[0].versions[0].timestamp = $timestamp | .[0].versions[0].changelog = $changelog' \
             manifest.json > manifest.tmp.json
           mv manifest.tmp.json manifest.json
           git config user.name "github-actions[bot]"

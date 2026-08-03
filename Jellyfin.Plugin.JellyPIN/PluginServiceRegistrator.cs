@@ -14,9 +14,11 @@ public sealed class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<IPinHasher, PinHasher>();
         serviceCollection.AddSingleton<IUnlockSessionService, UnlockSessionService>();
         serviceCollection.AddSingleton<IAttemptLimiter, AttemptLimiter>();
+        serviceCollection.AddSingleton<IAuditService, AuditService>();
         serviceCollection.AddSingleton<IProtectedItemService, ProtectedItemService>();
         serviceCollection.AddSingleton<IActiveProtectedRequestTracker, ActiveProtectedRequestTracker>();
         serviceCollection.AddSingleton<IProtectedPlaybackStopService, ProtectedPlaybackStopService>();
+        serviceCollection.AddHostedService<JellyPinSessionMonitor>();
         serviceCollection.AddTransient<IStartupFilter, JellyPinStartupFilter>();
     }
 }

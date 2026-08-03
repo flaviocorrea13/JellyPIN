@@ -2,96 +2,94 @@
 
 ![JellyPIN icon](assets/jellypin.png)
 
+[Português](docs/pt-BR/README.md) · English
+
+JellyPIN is parental-control software for Jellyfin that protects a complete media library with a PIN. It binds temporary unlocks to the authenticated Jellyfin user and device, hides protected discovery results, and enforces locked media requests on the server.
+
 Developed by Flavio Correa ([@flaviocorrea13](https://www.instagram.com/flaviocorrea13)).
 
-Project repository: [github.com/flaviocorrea13/JellyPIN](https://github.com/flaviocorrea13/JellyPIN)
+## Features
 
-JellyPIN is an experimental Jellyfin parental-control plugin. Version 0.1 provides the security primitives and authenticated API needed for temporary, per-user/per-device PIN unlock sessions.
+- Protect one complete Jellyfin library without tagging individual movies.
+- Require the PIN for every user, including administrators.
+- Bind each unlock to one user and one Jellyfin device id.
+- Renew the expiration while protected content is actively accessed or played.
+- Revoke an unlock when the Jellyfin session ends or logs out.
+- Lock every device immediately and stop protected playback already in progress.
+- List unlocked devices, their last protected activity, and expiration time.
+- Persist the latest 1,000 audit events without recording PINs, hashes, or access tokens.
+- Filter protected items from common item, latest, search, recommendation, and next-up responses.
+- Block direct item, image, subtitle, download, direct-play, HLS, and transcoding requests that contain a protected item id.
 
-Version 0.4 adds an ASP.NET Core request barrier registered by the plugin. When a request contains the id of the protected library or one of its descendants, JellyPIN denies locked requests before Jellyfin serves item metadata, images, downloads, subtitles, direct streams, or transcoding routes. This covers targeted item routes and queries containing item ids; broad discovery queries that contain no item or parent id still require a future Jellyfin query-layer integration for complete metadata filtering.
+## Installation
 
-Version 0.5 filters protected items from common discovery JSON responses, including item lists, latest items, search hints, recommendations, and next-up results. Direct item and media routes remain forbidden while locked.
+Jellyfin Server 10.11.11 and the .NET 9 runtime are currently supported.
 
-Administrators can call `POST /JellyPIN/LockAll` to revoke every temporary device unlock immediately. `POST /JellyPIN/Lock` continues to revoke only the calling device.
+1. Open **Dashboard → Plugins → Repositories**.
+2. Add a repository named `JellyPIN Repository` with this URL:
 
-The global lock also sends `Stop` to sessions playing protected items and aborts active protected HTTP media requests.
+   ```text
+   https://raw.githubusercontent.com/flaviocorrea13/JellyPIN/main/manifest.json
+   ```
 
-## Plugin repository
+3. Open the plugin catalog, install JellyPIN, and restart Jellyfin.
+4. Open **Dashboard → Plugins → JellyPIN → Settings**.
+5. Set a 4–8 digit PIN and choose the protected library.
+6. Install the matching JellyPIN Web package when you want the browser PIN dialog and repository-link enhancement.
 
-After the GitHub repository and the matching release are published, Jellyfin administrators can add this catalog URL:
+Upgrading Jellyfin Web can replace custom web files. Reinstall the matching JellyPIN Web package after a Jellyfin Web upgrade and never use a package built for a different Jellyfin Web version.
 
-```text
-https://raw.githubusercontent.com/flaviocorrea13/JellyPIN/main/manifest.json
+## Native clients
+
+The server enforcement applies to Android TV and Roku: locked metadata and playback requests are rejected even if the client has no JellyPIN user interface. The browser/Jellyfin Web client includes the interactive PIN flow. The official native Android TV and Roku clients do not currently expose a plugin UI extension point, so a native PIN dialog requires a client-specific contribution. See [Native client integration](docs/en/client-integration.md).
+
+This distinction is intentional: a client dialog improves usability, but the server remains the security boundary.
+
+## API
+
+All endpoints require a valid Jellyfin-authenticated request. Administrative endpoints additionally require Jellyfin elevation.
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `GET` | `/JellyPIN/Status` | Current device lock state |
+| `POST` | `/JellyPIN/Unlock` | Verify a PIN and unlock the current device |
+| `POST` | `/JellyPIN/Lock` | Lock the current device |
+| `POST` | `/JellyPIN/LockAll` | Administratively lock every device and stop protected playback |
+| `GET` | `/JellyPIN/Sessions` | List active unlock sessions |
+| `GET` | `/JellyPIN/Audit?limit=100` | Read recent audit events |
+| `DELETE` | `/JellyPIN/Audit` | Clear audit history |
+| `GET` | `/JellyPIN/Items/{id}/Access` | Check whether an item is protected and allowed |
+| `GET` | `/JellyPIN/Libraries` | List selectable Jellyfin libraries |
+
+Unlock body:
+
+```json
+{ "pin": "1234" }
 ```
 
-Suggested repository name: `JellyPIN Repository`.
+Clients must supply their stable Jellyfin device id through the normal Jellyfin authorization header or `X-Emby-Device-Id`.
 
-> **Important:** this MVP does not yet block Jellyfin media routes. Installing it alone does not prevent playback or hide protected items. See [Security boundary](#security-boundary).
+## Security notes
 
-## MVP 0.1
-
-- Plugin configuration and an embedded administrative page
-- PINs of 4–8 digits, stored only as PBKDF2-SHA256 hashes (210,000 iterations, random 128-bit salt)
-- In-memory attempt limiting and temporary lockout
-- In-memory unlock sessions bound to authenticated user and Jellyfin device id
-- `GET /JellyPIN/Status`
-- `POST /JellyPIN/Unlock` with `{ "pin": "1234" }`
-- `POST /JellyPIN/Lock`
-- `GET /JellyPIN/Items/{itemId}/Access`
-- `GET /JellyPIN/Libraries`
-- Basic unit tests
-
-The configuration page sends a new PIN over the authenticated Jellyfin connection to an elevation-protected administrative endpoint, which hashes it on the server before saving configuration. The plaintext PIN is not persisted. Use HTTPS on untrusted networks because HTTP does not protect request contents in transit.
+- The PIN is stored only as a PBKDF2-SHA256 hash with a random salt.
+- Plaintext PINs, hashes, and Jellyfin tokens are never written to the audit history.
+- Unlock sessions and attempt counters are intentionally memory-only; restarting Jellyfin fails closed and locks every device.
+- Audit events are stored in `Jellyfin.Plugin.JellyPIN.audit.json` below Jellyfin's plugin configuration directory.
+- Use HTTPS outside a trusted local network. HTTP exposes the PIN and Jellyfin token in transit.
+- JellyPIN has not received an independent security audit. Read [SECURITY.md](SECURITY.md) before reporting a vulnerability.
 
 ## Build
 
-The current official plugin template targets `net9.0`, so this repository follows it. This MVP is currently pinned to Jellyfin Server 10.11.11 (target ABI 10.11.0.0). Install the .NET 9 SDK, then run:
-
 ```powershell
-dotnet test JellyPIN.slnx
+dotnet restore JellyPIN.slnx
+dotnet test JellyPIN.slnx -c Release
 dotnet publish Jellyfin.Plugin.JellyPIN/Jellyfin.Plugin.JellyPIN.csproj -c Release
 ```
 
-Copy the published plugin DLL into a dedicated folder below the Jellyfin plugin directory and restart the server. Match the Jellyfin NuGet package versions, target ABI, and target framework to the exact Jellyfin Server release used in production before installing.
+The project follows the official Jellyfin plugin template and targets `net9.0`. Jellyfin package versions, target ABI, and the Jellyfin Web build must match the supported server release.
 
-`manifest.json` is the Jellyfin plugin catalog. Every release must update its release URL and MD5 checksum; the tag-based release workflow performs that update automatically.
+## Project status
 
-## API identity
+JellyPIN is experimental. The request middleware enforces known metadata and media paths and filters common discovery responses, but it is not an upstream Jellyfin authorization framework. New Jellyfin routes require review and coverage tests. A future upstream authorization extension point would provide a stronger and more maintainable boundary than plugin middleware.
 
-The JellyPIN API requires a valid Jellyfin-authenticated request. Unlock state is bound to the authenticated user claim and the Jellyfin device id. The controller accepts the device id from `X-Emby-Device-Id` or from the standard `X-Emby-Authorization` header.
-
-State is deliberately in memory for 0.1. Restarting Jellyfin locks every session and clears failed-attempt counters (fail closed for unlock state). A later version can persist lockouts if restart-based evasion is considered in scope.
-
-## Security boundary
-
-### Achievable with a normal plugin
-
-- Configuration page in the Jellyfin dashboard
-- Secure PIN hashing and verification
-- Custom authenticated REST endpoints
-- Attempt throttling, temporary sessions, and audit services
-- Reading library metadata and determining whether an item has the configured tag
-- Client-side UI additions only when the client is separately modified or injects a supported extension
-
-### Not enforced by this plugin MVP
-
-A conventional Jellyfin plugin does not expose a documented, comprehensive authorization hook that is guaranteed to run for every item, image, subtitle, download, direct-play, HLS, and transcoding request. A modal or custom endpoint is therefore not a security boundary: an unmodified client could call Jellyfin's existing media routes directly.
-
-Real enforcement needs one of these approaches:
-
-1. **Preferred upstream/server patch:** introduce a core authorization policy/service invoked by every metadata and media route. JellyPIN can implement or consult that policy. This gives one server-side security boundary and can eventually become a reusable plugin extension point.
-2. **Maintained Jellyfin Server fork:** patch all relevant query and delivery paths to consult JellyPIN unlock state. This works but creates an ongoing rebase and security-review burden.
-3. **Reverse proxy gate:** feasible only with careful route coverage and server-side item/tag resolution; easy to bypass if any route is missed, so it is not the recommended design.
-
-Jellyfin Web also needs a patch or supported client extension for the lock badge, PIN dialog, interception of navigation/play actions, and “lock now” command. That UI patch improves usability but cannot replace server enforcement. Native Android TV, Roku, Kodi, and other clients each require equivalent UX work, while the server patch remains authoritative.
-
-## Next implementation slice
-
-1. Add `ProtectedItemService` for the configured `jellypin` tag.
-2. Prototype a Jellyfin Server authorization hook and enumerate every protected route with integration tests.
-3. Add a Jellyfin Web PIN dialog that calls these endpoints.
-4. Add audit events without logging PINs, hashes, or authentication tokens.
-
-## Reference
-
-The repository structure follows the official `jellyfin/jellyfin-plugin-template`. Jellyfin plugin binaries link against GPL-licensed Jellyfin packages, so this project uses GPL-3.0-or-later.
+JellyPIN is licensed under GPL-3.0-or-later.

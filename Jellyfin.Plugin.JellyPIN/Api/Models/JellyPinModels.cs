@@ -16,3 +16,24 @@ public sealed record ItemAccessResponse(
     DateTimeOffset? ExpiresAt);
 
 public sealed record LibraryScopeResponse(string Id, string Name, string[] Locations);
+
+public sealed record UnlockSessionResponse(
+    Guid UserId,
+    string UserName,
+    string DeviceId,
+    string DeviceName,
+    string Client,
+    DateTimeOffset UnlockedAt,
+    DateTimeOffset LastActivityAt,
+    DateTimeOffset ExpiresAt);
+
+public sealed record AuditEventResponse(
+    Guid Id,
+    DateTimeOffset Timestamp,
+    string Type,
+    Guid? UserId,
+    string UserName,
+    string DeviceId,
+    string DeviceName,
+    string Client,
+    string Detail);

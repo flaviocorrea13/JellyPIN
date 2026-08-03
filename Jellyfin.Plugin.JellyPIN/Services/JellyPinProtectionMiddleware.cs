@@ -13,12 +13,36 @@ public sealed partial class JellyPinProtectionMiddleware(
     ILibraryManager libraryManager,
     IProtectedItemService protectedItems,
     IUnlockSessionService sessions,
+    IAuditService audit,
     IActiveProtectedRequestTracker activeRequests,
     IAuthorizationContext authorizationContext,
     ILogger<JellyPinProtectionMiddleware> logger)
 {
     public async Task InvokeAsync(HttpContext context)
     {
+        if (IsLogoutEndpoint(context.Request.Path))
+        {
+            var logoutAuthorization = await authorizationContext.GetAuthorizationInfo(context).ConfigureAwait(false);
+            var logoutDeviceId = GetDeviceId(context, logoutAuthorization.DeviceId);
+            if (logoutAuthorization.IsAuthenticated
+                && logoutAuthorization.UserId != Guid.Empty
+                && !string.IsNullOrWhiteSpace(logoutDeviceId))
+            {
+                sessions.Lock(logoutAuthorization.UserId, logoutDeviceId);
+                audit.Record(
+                    AuditEventType.SessionEnded,
+                    logoutAuthorization.UserId,
+                    logoutAuthorization.User?.Username,
+                    logoutDeviceId,
+                    logoutAuthorization.Device,
+                    logoutAuthorization.Client,
+                    "Jellyfin logout request.");
+            }
+
+            await next(context).ConfigureAwait(false);
+            return;
+        }
+
         var configuration = Plugin.Instance?.Configuration;
         if (configuration is null
             || string.IsNullOrWhiteSpace(configuration.PinHash)
@@ -49,6 +73,11 @@ public sealed partial class JellyPinProtectionMiddleware(
             }
             else
             {
+                sessions.Refresh(
+                    authorization.UserId,
+                    deviceId,
+                    TimeSpan.FromMinutes(configuration.UnlockDurationMinutes),
+                    out _);
                 using var registration = activeRequests.Track(context);
                 await next(context).ConfigureAwait(false);
             }
@@ -142,6 +171,12 @@ public sealed partial class JellyPinProtectionMiddleware(
     private static bool IsJellyPinEndpoint(PathString path) =>
         path.Value?.Split('/', StringSplitOptions.RemoveEmptyEntries)
             .Any(segment => string.Equals(segment, "JellyPIN", StringComparison.OrdinalIgnoreCase)) == true;
+
+    private static bool IsLogoutEndpoint(PathString path)
+    {
+        var value = path.Value?.TrimEnd('/') ?? string.Empty;
+        return value.EndsWith("/Sessions/Logout", StringComparison.OrdinalIgnoreCase);
+    }
 
     private static bool ShouldFilterDiscoveryResponse(HttpRequest request)
     {

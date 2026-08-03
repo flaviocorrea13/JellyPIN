@@ -1,0 +1,66 @@
+diff --git a/src/components/playback/playbackmanager.js b/src/components/playback/playbackmanager.js
+index 8c69228..c79cfd9 100644
+--- a/src/components/playback/playbackmanager.js
++++ b/src/components/playback/playbackmanager.js
+@@ -32,6 +32,7 @@ import { MediaError } from 'types/mediaError';
+ import { getMediaError } from 'utils/mediaError';
+ import { toApi } from 'utils/jellyfin-apiclient/compat';
+ import { bindSkipSegment } from './skipsegment.ts';
++import { ensureJellyPinPlaybackAccess } from '../jellypin/jellypin';
+ 
+ const UNLIMITED_ITEMS = -1;
+ 
+@@ -2112,6 +2113,11 @@ export class PlaybackManager {
+                 })).Items;
+             }
+ 
++            if (!await ensureJellyPinPlaybackAccess(items)) {
++                loading.hide();
++                return;
++            }
++
+             // Prepare the list of items
+             items = await translateItemsForPlayback(items, options);
+             // Add any additional parts for movies or episodes
+diff --git a/src/controllers/movies/moviesrecommended.js b/src/controllers/movies/moviesrecommended.js
+index 5e476ec..f9b23d8 100644
+--- a/src/controllers/movies/moviesrecommended.js
++++ b/src/controllers/movies/moviesrecommended.js
+@@ -14,6 +14,7 @@ import { LibraryTab } from 'types/libraryTab';
+ import { getBackdropShape, getPortraitShape } from 'utils/card';
+ import Dashboard from 'utils/dashboard';
+ import Events from 'utils/events';
++import { ensureJellyPinLibraryAccess } from 'components/jellypin/jellypin';
+ 
+ import 'elements/emby-scroller/emby-scroller';
+ import 'elements/emby-itemscontainer/emby-itemscontainer';
+@@ -260,6 +261,14 @@ function getDefaultTabIndex(folderId) {
+ }
+ 
+ export default function (view, params) {
++    let accessCheck;
++
++    async function allowLibraryEntry() {
++        if (!params.topParentId) return true;
++        accessCheck ??= ensureJellyPinLibraryAccess(params.topParentId, ApiClient.serverId());
++        return accessCheck;
++    }
++
+     function onBeforeTabChange(e) {
+         preLoadTab(view, parseInt(e.detail.selectedTabIndex, 10));
+     }
+@@ -375,7 +384,13 @@ export default function (view, params) {
+ 
+     const tabControllers = [];
+     let renderedTabs = [];
+-    view.addEventListener('viewshow', function () {
++    view.addEventListener('viewshow', async function () {
++        view.style.visibility = 'hidden';
++        if (!await allowLibraryEntry()) {
++            Dashboard.navigate('home');
++            return;
++        }
++        view.style.visibility = '';
+         initTabs();
+         if (!view.getAttribute('data-title')) {
+             const parentId = params.topParentId;

@@ -21,6 +21,7 @@ public sealed partial class JellyPinController(
     ILibraryManager libraryManager,
     IActiveProtectedRequestTracker activeRequests,
     IProtectedPlaybackStopService playbackStopService,
+    IAuditService audit,
     IAuthorizationContext authorizationContext) : ControllerBase
 {
     [HttpPost("Pin")]
@@ -56,6 +57,7 @@ public sealed partial class JellyPinController(
         plugin.UpdateConfiguration(configuration);
         attemptLimiter.ResetAll();
         sessions.LockAll();
+        audit.Record(AuditEventType.PinReset, detail: "PIN reset by an administrator.");
         return NoContent();
     }
 
@@ -85,6 +87,7 @@ public sealed partial class JellyPinController(
         var decision = attemptLimiter.Check(identity.UserId, identity.DeviceId, config.MaximumAttempts, TimeSpan.FromMinutes(config.LockoutMinutes));
         if (!decision.Allowed)
         {
+            audit.Record(AuditEventType.UnlockFailed, identity.UserId, identity.UserName, identity.DeviceId, identity.DeviceName, identity.Client, "Attempt rejected during lockout.");
             if (decision.LockedUntil is { } lockedUntil) Response.Headers.RetryAfter = Math.Max(1, (int)(lockedUntil - DateTimeOffset.UtcNow).TotalSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture);
             return StatusCode(StatusCodes.Status429TooManyRequests);
         }
@@ -92,11 +95,19 @@ public sealed partial class JellyPinController(
         if (!pinHasher.Verify(request.Pin, config.PinHash))
         {
             attemptLimiter.RecordFailure(identity.UserId, identity.DeviceId, config.MaximumAttempts, TimeSpan.FromMinutes(config.LockoutMinutes));
+            audit.Record(AuditEventType.UnlockFailed, identity.UserId, identity.UserName, identity.DeviceId, identity.DeviceName, identity.Client, "Incorrect PIN.");
             return Unauthorized();
         }
 
         attemptLimiter.Reset(identity.UserId, identity.DeviceId);
-        var expiry = sessions.Unlock(identity.UserId, identity.DeviceId, TimeSpan.FromMinutes(config.UnlockDurationMinutes));
+        var expiry = sessions.Unlock(
+            identity.UserId,
+            identity.DeviceId,
+            TimeSpan.FromMinutes(config.UnlockDurationMinutes),
+            identity.UserName,
+            identity.DeviceName,
+            identity.Client);
+        audit.Record(AuditEventType.UnlockSucceeded, identity.UserId, identity.UserName, identity.DeviceId, identity.DeviceName, identity.Client);
         return Ok(new UnlockResponse(true, expiry));
     }
 
@@ -106,6 +117,7 @@ public sealed partial class JellyPinController(
     {
         var identity = await GetIdentityAsync().ConfigureAwait(false);
         sessions.Lock(identity.UserId, identity.DeviceId);
+        audit.Record(AuditEventType.LockDevice, identity.UserId, identity.UserName, identity.DeviceId, identity.DeviceName, identity.Client);
         return NoContent();
     }
 
@@ -115,6 +127,7 @@ public sealed partial class JellyPinController(
     public async Task<IActionResult> LockAll(CancellationToken cancellationToken)
     {
         sessions.LockAll();
+        audit.Record(AuditEventType.LockAll, detail: "All devices locked by an administrator.");
         var configuration = GetConfiguration();
         activeRequests.AbortAll();
         await playbackStopService.StopAllAsync(
@@ -161,10 +174,50 @@ public sealed partial class JellyPinController(
         return Ok(libraries);
     }
 
+    [HttpGet("Sessions")]
+    [Authorize(Policy = Policies.RequiresElevation)]
+    [ProducesResponseType<UnlockSessionResponse[]>(StatusCodes.Status200OK)]
+    public ActionResult<UnlockSessionResponse[]> Sessions() => Ok(sessions.GetActiveSessions()
+        .Select(session => new UnlockSessionResponse(
+            session.UserId,
+            session.UserName,
+            session.DeviceId,
+            session.DeviceName,
+            session.Client,
+            session.UnlockedAt,
+            session.LastActivityAt,
+            session.ExpiresAt))
+        .ToArray());
+
+    [HttpGet("Audit")]
+    [Authorize(Policy = Policies.RequiresElevation)]
+    [ProducesResponseType<AuditEventResponse[]>(StatusCodes.Status200OK)]
+    public ActionResult<AuditEventResponse[]> Audit([FromQuery] int limit = 100) => Ok(audit.GetRecent(limit)
+        .Select(entry => new AuditEventResponse(
+            entry.Id,
+            entry.Timestamp,
+            entry.Type.ToString(),
+            entry.UserId,
+            entry.UserName,
+            entry.DeviceId,
+            entry.DeviceName,
+            entry.Client,
+            entry.Detail))
+        .ToArray());
+
+    [HttpDelete("Audit")]
+    [Authorize(Policy = Policies.RequiresElevation)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public IActionResult ClearAudit()
+    {
+        audit.Clear();
+        return NoContent();
+    }
+
     private static Configuration.PluginConfiguration GetConfiguration() =>
         Plugin.Instance?.Configuration ?? throw new InvalidOperationException("JellyPIN is not initialized.");
 
-    private async Task<(Guid UserId, string DeviceId)> GetIdentityAsync()
+    private async Task<RequestIdentity> GetIdentityAsync()
     {
         var info = await authorizationContext.GetAuthorizationInfo(HttpContext).ConfigureAwait(false);
         if (!info.IsAuthenticated || info.UserId == Guid.Empty)
@@ -188,8 +241,15 @@ public sealed partial class JellyPinController(
 
         if (string.IsNullOrWhiteSpace(deviceId))
             throw new BadHttpRequestException("A Jellyfin device id is required.");
-        return (info.UserId, deviceId);
+        return new RequestIdentity(
+            info.UserId,
+            info.User?.Username ?? string.Empty,
+            deviceId,
+            info.Device ?? string.Empty,
+            info.Client ?? string.Empty);
     }
+
+    private sealed record RequestIdentity(Guid UserId, string UserName, string DeviceId, string DeviceName, string Client);
 
     [GeneratedRegex("DeviceId=(?:\\\"([^\\\"]+)\\\"|([^,\\s]+))", RegexOptions.IgnoreCase)]
     private static partial Regex DeviceIdRegex();
