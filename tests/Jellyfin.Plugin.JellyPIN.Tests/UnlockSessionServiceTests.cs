@@ -1,0 +1,34 @@
+using Jellyfin.Plugin.JellyPIN.Services;
+
+namespace Jellyfin.Plugin.JellyPIN.Tests;
+
+public sealed class UnlockSessionServiceTests
+{
+    [Fact]
+    public void Session_IsBoundToUserAndDeviceAndExpires()
+    {
+        var clock = new TestTimeProvider(DateTimeOffset.Parse("2026-01-01T00:00:00Z"));
+        var sut = new UnlockSessionService(clock);
+        var user = Guid.NewGuid();
+        sut.Unlock(user, "living-room", TimeSpan.FromMinutes(30));
+        Assert.True(sut.IsUnlocked(user, "LIVING-ROOM", out _));
+        Assert.False(sut.IsUnlocked(Guid.NewGuid(), "living-room", out _));
+        clock.Advance(TimeSpan.FromMinutes(31));
+        Assert.False(sut.IsUnlocked(user, "living-room", out _));
+    }
+
+    [Fact]
+    public void LockAll_RevokesEverySession()
+    {
+        var sut = new UnlockSessionService(TimeProvider.System);
+        var firstUser = Guid.NewGuid();
+        var secondUser = Guid.NewGuid();
+        sut.Unlock(firstUser, "tv", TimeSpan.FromMinutes(30));
+        sut.Unlock(secondUser, "phone", TimeSpan.FromMinutes(30));
+
+        sut.LockAll();
+
+        Assert.False(sut.IsUnlocked(firstUser, "tv", out _));
+        Assert.False(sut.IsUnlocked(secondUser, "phone", out _));
+    }
+}

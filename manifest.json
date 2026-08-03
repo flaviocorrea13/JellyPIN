@@ -1,0 +1,20 @@
+[
+  {
+    "guid": "09d4787d-3d9a-47ab-a5a6-44561d36a90e",
+    "name": "JellyPIN",
+    "overview": "Protect a Jellyfin library with a PIN.",
+    "description": "Parental-control PIN protection with per-device unlock sessions, discovery filtering and server-side media enforcement.",
+    "owner": "Flavio Correa (@flaviocorrea13)",
+    "category": "General",
+    "versions": [
+      {
+        "version": "0.5.0.3",
+        "changelog": "Add community repository metadata, maintainer identity and release automation.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/flaviocorrea13/JellyPIN/releases/download/v0.5.0.3/JellyPIN_0.5.0.3_Jellyfin_10.11.11.zip",
+        "checksum": "13DDD5BD17A29437DC7E9D8D846BBBEC",
+        "timestamp": "2026-08-02T22:10:00Z"
+      }
+    ]
+  }
+]

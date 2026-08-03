@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><title>JellyPIN</title></head>
+<body>
+<div id="JellyPinConfigPage" data-role="page" class="page type-interior pluginConfigurationPage" data-require="emby-input,emby-button">
+  <div data-role="content"><div class="content-primary">
+    <form id="JellyPinConfigForm">
+      <div class="inputContainer"><label class="inputLabel" for="Pin">Novo PIN</label><input id="Pin" type="password" inputmode="numeric" pattern="[0-9]{4,8}" minlength="4" maxlength="8" is="emby-input"><div class="fieldDescription">Deixe vazio para manter o PIN atual. São aceitos de 4 a 8 dígitos.</div></div>
+      <div class="inputContainer"><label class="inputLabel" for="UnlockDurationMinutes">Duração do desbloqueio (minutos)</label><input id="UnlockDurationMinutes" type="number" min="1" max="1440" is="emby-input"></div>
+      <div class="inputContainer"><label class="inputLabel" for="MaximumAttempts">Máximo de tentativas</label><input id="MaximumAttempts" type="number" min="1" max="20" is="emby-input"></div>
+      <div class="inputContainer"><label class="inputLabel" for="LockoutMinutes">Bloqueio após erros (minutos)</label><input id="LockoutMinutes" type="number" min="1" max="1440" is="emby-input"></div>
+      <div class="selectContainer"><label class="selectLabel" for="ProtectedLibraryId">Biblioteca protegida</label><select id="ProtectedLibraryId" is="emby-select" class="emby-select-withcolor emby-select"><option value="">Nenhuma biblioteca</option></select><div class="fieldDescription">Todos os conteúdos dentro desta biblioteca exigirão o PIN.</div></div>
+      <button is="emby-button" type="submit" class="raised button-submit block emby-button"><span>Salvar</span></button>
+      <h2 style="margin-top:2em">Teste do JellyPIN</h2>
+      <p id="JellyPinStatus">Carregando status…</p>
+      <button id="TestStatus" is="emby-button" type="button" class="raised block emby-button"><span>Atualizar status</span></button>
+      <button id="TestUnlock" is="emby-button" type="button" class="raised block emby-button"><span>Testar PIN e desbloquear</span></button>
+      <button id="TestLock" is="emby-button" type="button" class="raised block emby-button"><span>Bloquear todos os dispositivos</span></button>
+      <div class="inputContainer" style="margin-top:2em"><label class="inputLabel" for="TestItemId">ID do conteúdo para testar</label><input id="TestItemId" type="text" is="emby-input"><div class="fieldDescription">Abra um filme, copie o ID exibido na URL e teste se a tag configurada foi reconhecida.</div></div>
+      <button id="TestItemAccess" is="emby-button" type="button" class="raised block emby-button"><span>Testar proteção do conteúdo</span></button>
+      <h2 style="margin-top:2em">Recuperação administrativa</h2>
+      <p>Remove o PIN atual e bloqueia todos os dispositivos. As demais configurações serão mantidas.</p>
+      <button id="ResetPin" is="emby-button" type="button" class="raised block emby-button button-delete"><span>Redefinir PIN</span></button>
+      <p style="margin-top:2em">Desenvolvido por Flavio Correa (<a href="https://www.instagram.com/flaviocorrea13" target="_blank" rel="noopener noreferrer">@flaviocorrea13</a>) · <a href="https://github.com/flaviocorrea13/JellyPIN" target="_blank" rel="noopener noreferrer">Repositório</a></p>
+    </form>
+  </div></div>
+  <script>
+  (() => {
+    const JellyPinConfig = { pluginId: '09d4787d-3d9a-47ab-a5a6-44561d36a90e' };
+    const page = document.querySelector('#JellyPinConfigPage');
+    async function refreshStatus() {
+      const status = await ApiClient.ajax({type:'GET', url:ApiClient.getUrl('JellyPIN/Status', { _: Date.now() }), dataType:'json'});
+      const unlocked = status.unlocked ?? status.Unlocked ?? false;
+      const configured = status.configured ?? status.Configured ?? false;
+      const expiresAt = status.expiresAt ?? status.ExpiresAt;
+      document.querySelector('#JellyPinStatus').textContent = unlocked
+        ? 'Desbloqueado até ' + new Date(expiresAt).toLocaleString()
+        : (configured ? 'PIN configurado; dispositivo bloqueado.' : 'PIN ainda não configurado.');
+      return status;
+    }
+    async function loadLibraries(selectedId) {
+      const select = document.querySelector('#ProtectedLibraryId');
+      const libraries = await ApiClient.ajax({type:'GET', url:ApiClient.getUrl('JellyPIN/Libraries', { _: Date.now() }), dataType:'json'});
+      select.innerHTML = '<option value="">Nenhuma biblioteca</option>';
+      libraries.forEach(library => {
+        const id = library.id ?? library.Id;
+        const name = library.name ?? library.Name;
+        const option = document.createElement('option');
+        option.value = id;
+        option.textContent = name;
+        option.selected = id === selectedId;
+        select.appendChild(option);
+      });
+    }
+    page.addEventListener('pageshow', async () => {
+      Dashboard.showLoadingMsg();
+      const c = await ApiClient.getPluginConfiguration(JellyPinConfig.pluginId);
+      ['UnlockDurationMinutes','MaximumAttempts','LockoutMinutes'].forEach(id => document.querySelector('#'+id).value = c[id]);
+      try { await loadLibraries(c.ProtectedLibraryId || ''); } catch (error) { document.querySelector('#JellyPinStatus').textContent = 'Erro ao carregar bibliotecas: ' + (error.status || error.message || error); }
+      try { await refreshStatus(); } catch (error) { document.querySelector('#JellyPinStatus').textContent = 'Erro ao consultar status: ' + (error.status || error.message || error); }
+      Dashboard.hideLoadingMsg();
+    });
+    document.querySelector('#JellyPinConfigForm').addEventListener('submit', async e => {
+      e.preventDefault(); Dashboard.showLoadingMsg();
+      try {
+        const c = await ApiClient.getPluginConfiguration(JellyPinConfig.pluginId);
+        const pin = document.querySelector('#Pin').value;
+        c.UnlockDurationMinutes = Number(document.querySelector('#UnlockDurationMinutes').value);
+        c.MaximumAttempts = Number(document.querySelector('#MaximumAttempts').value);
+        c.LockoutMinutes = Number(document.querySelector('#LockoutMinutes').value);
+        c.ProtectedLibraryId = document.querySelector('#ProtectedLibraryId').value;
+        const result = await ApiClient.updatePluginConfiguration(JellyPinConfig.pluginId, c);
+        if (pin) {
+          await ApiClient.ajax({
+            type: 'POST',
+            url: ApiClient.getUrl('JellyPIN/Pin'),
+            data: JSON.stringify({ pin: pin }),
+            contentType: 'application/json'
+          });
+        }
+        document.querySelector('#Pin').value = '';
+        Dashboard.processPluginConfigurationUpdateResult(result);
+      } catch (error) { Dashboard.hideLoadingMsg(); Dashboard.alert(error.message || String(error)); }
+      return false;
+    });
+    document.querySelector('#TestStatus').addEventListener('click', async () => {
+      try { await refreshStatus(); } catch (error) { document.querySelector('#JellyPinStatus').textContent = 'Erro: ' + (error.status || error.message || error); }
+    });
+    document.querySelector('#TestUnlock').addEventListener('click', async () => {
+      const pin = document.querySelector('#Pin').value;
+      if (!pin) { document.querySelector('#JellyPinStatus').textContent = 'Digite o PIN no campo “Novo PIN” para testar.'; return; }
+      try {
+        await ApiClient.ajax({type:'POST', url:ApiClient.getUrl('JellyPIN/Unlock'), data:JSON.stringify({pin}), contentType:'application/json', dataType:'json'});
+        await refreshStatus();
+      } catch (error) { document.querySelector('#JellyPinStatus').textContent = 'PIN recusado ou erro HTTP: ' + (error.status || error.message || error); }
+    });
+    document.querySelector('#TestLock').addEventListener('click', async () => {
+      try {
+        await ApiClient.ajax({type:'POST', url:ApiClient.getUrl('JellyPIN/LockAll')});
+        await refreshStatus();
+      } catch (error) { document.querySelector('#JellyPinStatus').textContent = 'Erro ao bloquear: ' + (error.status || error.message || error); }
+    });
+    document.querySelector('#TestItemAccess').addEventListener('click', async () => {
+      const itemId = document.querySelector('#TestItemId').value.trim();
+      if (!itemId) { document.querySelector('#JellyPinStatus').textContent = 'Informe o ID do conteúdo.'; return; }
+      try {
+        const access = await ApiClient.ajax({type:'GET', url:ApiClient.getUrl('JellyPIN/Items/' + encodeURIComponent(itemId) + '/Access', { _: Date.now() }), dataType:'json'});
+        const isProtected = access.protected ?? access.Protected ?? false;
+        const allowed = access.allowed ?? access.Allowed ?? false;
+        document.querySelector('#JellyPinStatus').textContent = isProtected
+          ? (allowed ? 'Conteúdo protegido e liberado neste dispositivo.' : 'Conteúdo protegido e bloqueado neste dispositivo.')
+          : 'Conteúdo fora da biblioteca protegida.';
+      } catch (error) { document.querySelector('#JellyPinStatus').textContent = 'Erro ao testar conteúdo: ' + (error.status || error.message || error); }
+    });
+    document.querySelector('#ResetPin').addEventListener('click', async () => {
+      if (!window.confirm('Remover o PIN atual e bloquear todos os dispositivos?')) return;
+      Dashboard.showLoadingMsg();
+      try {
+        await ApiClient.ajax({type:'DELETE', url:ApiClient.getUrl('JellyPIN/Pin')});
+        document.querySelector('#Pin').value = '';
+        await refreshStatus();
+        Dashboard.hideLoadingMsg();
+        Dashboard.alert('PIN removido. Cadastre um novo PIN quando desejar.');
+      } catch (error) {
+        Dashboard.hideLoadingMsg();
+        Dashboard.alert('Não foi possível redefinir o PIN. Erro HTTP: ' + (error.status || error.message || error));
+      }
+    });
+  })();
+  </script>
+</div>
+</body>
+</html>

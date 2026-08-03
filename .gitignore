@@ -1,0 +1,11 @@
+bin/
+obj/
+.vs/
+.idea/
+TestResults/
+.dotnet-cli/
+.nuget-packages/
+*.user
+.dotnet-home/
+artifacts/
+integrations/

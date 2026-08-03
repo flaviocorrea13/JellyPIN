@@ -1,0 +1,66 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore
+        run: dotnet restore JellyPIN.slnx
+
+      - name: Test
+        run: dotnet test JellyPIN.slnx -c Release --no-restore
+
+      - name: Publish plugin
+        run: dotnet publish Jellyfin.Plugin.JellyPIN/Jellyfin.Plugin.JellyPIN.csproj -c Release --no-restore
+
+      - name: Package plugin
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          package="JellyPIN_${version}_Jellyfin_10.11.11.zip"
+          mkdir -p release/package
+          cp Jellyfin.Plugin.JellyPIN/bin/Release/net9.0/publish/Jellyfin.Plugin.JellyPIN.* release/package/
+          cp meta.json release/package/
+          (cd release/package && zip -9 "../${package}" ./*)
+          md5sum "release/${package}" > "release/${package}.md5"
+          sha256sum "release/${package}" > "release/${package}.sha256"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" release/*.zip release/*.md5 release/*.sha256 --generate-notes
+
+      - name: Update Jellyfin catalog checksum
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          package="JellyPIN_${version}_Jellyfin_10.11.11.zip"
+          checksum="$(md5sum "release/${package}" | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')"
+          source_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${package}"
+          git fetch origin main
+          git checkout main
+          jq --arg version "$version" --arg checksum "$checksum" --arg source_url "$source_url" \
+            '.[0].versions[0].version = $version | .[0].versions[0].checksum = $checksum | .[0].versions[0].sourceUrl = $source_url' \
+            manifest.json > manifest.tmp.json
+          mv manifest.tmp.json manifest.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manifest.json
+          git commit -m "chore: update plugin catalog for ${GITHUB_REF_NAME}" || exit 0
+          git push origin main
