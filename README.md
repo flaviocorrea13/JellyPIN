@@ -1,5 +1,7 @@
 # JellyPIN
 
+![JellyPIN icon](assets/jellypin.png)
+
 Developed by Flavio Correa ([@flaviocorrea13](https://www.instagram.com/flaviocorrea13)).
 
 Project repository: [github.com/flaviocorrea13/JellyPIN](https://github.com/flaviocorrea13/JellyPIN)

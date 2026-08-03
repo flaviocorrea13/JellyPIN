@@ -1,0 +1,36 @@
+diff --git a/src/apps/dashboard/features/plugins/components/PluginDetailsTable.tsx b/src/apps/dashboard/features/plugins/components/PluginDetailsTable.tsx
+index e46e44b..01bedb1 100644
+--- a/src/apps/dashboard/features/plugins/components/PluginDetailsTable.tsx
++++ b/src/apps/dashboard/features/plugins/components/PluginDetailsTable.tsx
+@@ -19,6 +19,22 @@ interface PluginDetailsTableProps extends PaperProps {
+     pluginDetails?: PluginDetails
+ }
+ 
++const getRepositoryProjectUrl = (repositoryUrl: string) => {
++    try {
++        const url = new URL(repositoryUrl);
++        if (url.hostname === 'raw.githubusercontent.com') {
++            const [owner, repository] = url.pathname.split('/').filter(Boolean);
++            if (owner && repository) {
++                return `https://github.com/${owner}/${repository}`;
++            }
++        }
++    } catch {
++        // Keep the manifest URL when it is not a valid absolute URL.
++    }
++
++    return repositoryUrl;
++};
++
+ const PluginDetailsTable: FC<PluginDetailsTableProps> = ({
+     isPluginLoading,
+     isRepositoryLoading,
+@@ -78,7 +94,7 @@ const PluginDetailsTable: FC<PluginDetailsTableProps> = ({
+                             || (pluginDetails?.version?.repositoryUrl && (
+                                 <Link
+                                     component={RouterLink}
+-                                    to={pluginDetails.version.repositoryUrl}
++                                    to={getRepositoryProjectUrl(pluginDetails.version.repositoryUrl)}
+                                     target='_blank'
+                                     rel='noopener noreferrer'
+                                 >
