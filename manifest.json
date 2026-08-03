@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/flaviocorrea13/JellyPIN/main/assets/jellypin.png",
     "versions": [
       {
-        "version": "0.8.0.0",
-        "changelog": "Add a verified Jellyfin Web installer with automatic backup, rollback and restore commands.",
+        "version": "0.8.0.1",
+        "changelog": "Fix Jellyfin Web directory permissions and wait for stable server startup before accepting an installation.",
         "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/flaviocorrea13/JellyPIN/releases/download/v0.8.0.0/JellyPIN_0.8.0.0_Jellyfin_10.11.11.zip",
-        "checksum": "57C53BAFB4E060CE325FCAA5D1DBA0AD",
-        "timestamp": "2026-08-03T17:19:04Z"
+        "sourceUrl": "https://github.com/flaviocorrea13/JellyPIN/releases/download/v0.8.0.1/JellyPIN_0.8.0.1_Jellyfin_10.11.11.zip",
+        "checksum": "F7E7AEE4C12B91F757435C0AA3E527A7",
+        "timestamp": "2026-08-03T17:37:08Z"
       }
     ]
   }
