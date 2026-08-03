@@ -56,7 +56,7 @@ require_root() {
 
 require_commands() {
     local command
-    for command in curl sha256sum unzip tar systemctl mktemp flock sed grep find readlink awk; do
+    for command in curl sha256sum unzip tar systemctl mktemp flock sed grep find readlink awk chmod; do
         command -v "$command" >/dev/null 2>&1 || fail "Required command not found: $command"
     done
 }
@@ -144,6 +144,14 @@ verify_staged_web() {
     find "$stage" -type f -name '*.js' -print -quit | grep -q . || fail "The staged package does not contain JavaScript assets."
 }
 
+wait_for_stable_service() {
+    local second
+    for ((second = 1; second <= 20; second++)); do
+        sleep 1
+        systemctl is-active --quiet "$SERVICE_NAME" || return 1
+    done
+}
+
 activate_stage() {
     local stage="$1" rollback parent
     parent="$(dirname "$WEB_DIR")"
@@ -158,7 +166,7 @@ activate_stage() {
         fail "Could not activate the staged Web directory; the previous version was restored."
     fi
 
-    if ! systemctl start "$SERVICE_NAME" || ! systemctl is-active --quiet "$SERVICE_NAME"; then
+    if ! systemctl start "$SERVICE_NAME" || ! wait_for_stable_service; then
         systemctl stop "$SERVICE_NAME" || true
         rm -rf -- "$WEB_DIR"
         mv -- "$rollback" "$WEB_DIR"
@@ -200,6 +208,7 @@ install_web() {
     unzip -q "$archive" -d "$stage"
     cp -a -- "$WEB_DIR/config.json" "$stage/config.json"
     chown -R --reference="$WEB_DIR" "$stage"
+    chmod --reference="$WEB_DIR" "$stage"
     verify_staged_web "$stage"
 
     backup_id="$(create_backup "pre-install" "$version")"
