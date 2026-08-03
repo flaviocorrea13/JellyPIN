@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/flaviocorrea13/JellyPIN/main/assets/jellypin.png",
     "versions": [
       {
-        "version": "0.7.0.0",
-        "changelog": "Add secure administrator-initiated remote unlock for selected active devices, including Roku clients.",
+        "version": "0.8.0.0",
+        "changelog": "Add a verified Jellyfin Web installer with automatic backup, rollback and restore commands.",
         "targetAbi": "10.11.0.0",
-        "sourceUrl": "https://github.com/flaviocorrea13/JellyPIN/releases/download/v0.7.0.0/JellyPIN_0.7.0.0_Jellyfin_10.11.11.zip",
-        "checksum": "D437B015516BA8933EB180517E173B4B",
-        "timestamp": "2026-08-03T14:06:25Z"
+        "sourceUrl": "https://github.com/flaviocorrea13/JellyPIN/releases/download/v0.8.0.0/JellyPIN_0.8.0.0_Jellyfin_10.11.11.zip",
+        "checksum": "57C53BAFB4E060CE325FCAA5D1DBA0AD",
+        "timestamp": "2026-08-03T17:19:04Z"
       }
     ]
   }
