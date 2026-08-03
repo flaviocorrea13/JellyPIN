@@ -37,6 +37,8 @@ Jellyfin Server 10.11.11 and the .NET 9 runtime are currently supported.
 5. Set a 4–8 digit PIN and choose the protected library.
 6. Install the matching JellyPIN Web package when you want the browser PIN dialog and repository-link enhancement.
 
+For Linux/LXC installations, use the [JellyPIN Web manager](docs/en/web-manager.md) to verify the release checksum, preserve `config.json`, create a backup, and restore automatically if Jellyfin fails to restart.
+
 Upgrading Jellyfin Web can replace custom web files. Reinstall the matching JellyPIN Web package after a Jellyfin Web upgrade and never use a package built for a different Jellyfin Web version.
 
 ## Native clients

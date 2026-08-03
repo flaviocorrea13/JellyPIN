@@ -37,6 +37,8 @@ Atualmente são suportados Jellyfin Server 10.11.11 e runtime .NET 9.
 5. Cadastre um PIN de 4 a 8 dígitos e escolha a biblioteca protegida.
 6. Instale o pacote JellyPIN Web correspondente para obter o diálogo de PIN no navegador.
 
+Em instalações Linux/LXC, utilize o [gerenciador do JellyPIN Web](web-manager.md). Ele valida o checksum da release, preserva o `config.json`, cria um backup e restaura automaticamente a versão anterior se o Jellyfin não reiniciar.
+
 Uma atualização do Jellyfin Web pode substituir os arquivos personalizados. Reinstale o JellyPIN Web compatível após atualizar o Jellyfin e nunca instale um pacote criado para outra versão.
 
 ## Android TV e Roku

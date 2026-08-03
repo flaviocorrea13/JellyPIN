@@ -15,6 +15,10 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
+      - name: Validate JellyPIN Web manager
+        shell: bash
+        run: bash -n scripts/jellypin-web-manager.sh
+
       - name: Install .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -38,8 +42,8 @@ jobs:
           cp Jellyfin.Plugin.JellyPIN/bin/Release/net9.0/publish/Jellyfin.Plugin.JellyPIN.* release/package/
           cp meta.json release/package/
           (cd release/package && zip -9 "../${package}" ./*)
-          md5sum "release/${package}" > "release/${package}.md5"
-          sha256sum "release/${package}" > "release/${package}.sha256"
+          (cd release && md5sum "${package}" > "${package}.md5")
+          (cd release && sha256sum "${package}" > "${package}.sha256")
 
       - name: Build JellyPIN Web for Jellyfin 10.11.11
         shell: bash
@@ -52,7 +56,10 @@ jobs:
           cp web/jellypin.js release/jellyfin-web/src/components/jellypin/jellypin.js
           npm --prefix release/jellyfin-web ci
           NODE_OPTIONS=--max-old-space-size=8192 npm --prefix release/jellyfin-web run build:production
-          (cd release/jellyfin-web/dist && zip -9 -r "../../JellyPIN_Web_${version}_Jellyfin_10.11.11.zip" .)
+          web_package="JellyPIN_Web_${version}_Jellyfin_10.11.11.zip"
+          (cd release/jellyfin-web/dist && zip -9 -r "../../${web_package}" .)
+          (cd release && md5sum "${web_package}" > "${web_package}.md5")
+          (cd release && sha256sum "${web_package}" > "${web_package}.sha256")
 
       - name: Create GitHub release
         env:
